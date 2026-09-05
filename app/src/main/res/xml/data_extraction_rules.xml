@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <!-- This file specifies which user data gets backed up and how -->
+    <domain-config>
+        <domain name="sharedpref" includeSubdomains="true">
+            <!-- Backup preferences -->
+        </domain>
+        <domain name="database" includeSubdomains="true">
+            <!-- Backup databases -->
+        </domain>
+        <domain name="file" includeSubdomains="true">
+            <!-- Backup files -->
+        </domain>
+    </domain-config>
+</data-extraction-rules>
