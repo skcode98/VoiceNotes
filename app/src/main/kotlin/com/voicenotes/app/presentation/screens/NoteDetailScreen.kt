@@ -30,6 +30,10 @@ fun NoteDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showDeleteDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(noteId) {
+        viewModel.loadNote(noteId)
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -217,6 +221,7 @@ fun NoteDetailScreen(
                     onClick = {
                         // Delete logic
                         showDeleteDialog = false
+                        viewModel.deleteNote()
                         navController.popBackStack()
                     },
                     colors = ButtonDefaults.buttonColors(

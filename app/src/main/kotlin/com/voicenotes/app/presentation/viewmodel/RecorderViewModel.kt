@@ -2,6 +2,8 @@ package com.voicenotes.app.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voicenotes.app.data.audio.AudioRecorder
+import com.voicenotes.app.data.transcription.TranscriptionService
 import com.voicenotes.app.domain.model.VoiceNote
 import com.voicenotes.app.domain.usecase.SaveNoteUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,31 +27,58 @@ data class RecorderUiState(
 
 @HiltViewModel
 class RecorderViewModel @Inject constructor(
-    private val saveNoteUseCase: SaveNoteUseCase
+    private val saveNoteUseCase: SaveNoteUseCase,
+    private val audioRecorder: AudioRecorder,
+    private val transcriptionService: TranscriptionService
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(RecorderUiState())
     val uiState: StateFlow<RecorderUiState> = _uiState.asStateFlow()
 
-    fun startRecording() {
-        _uiState.update { it.copy(isRecording = true, isPaused = false) }
+    fun startRecording(language: String = "en") {
+        viewModelScope.launch {
+            audioRecorder.startRecording().fold(
+                onSuccess = { path ->
+                    transcriptionService.startLiveTranscription(language)
+                    _uiState.update { it.copy(isRecording = true, isPaused = false, audioFilePath = path) }
+                },
+                onFailure = { error -> _uiState.update { it.copy(error = error.message) } }
+            )
+        }
     }
 
     fun pauseRecording() {
-        _uiState.update { it.copy(isPaused = true) }
+        viewModelScope.launch {
+            audioRecorder.pauseRecording()
+            _uiState.update { it.copy(isPaused = true) }
+        }
     }
 
     fun resumeRecording() {
-        _uiState.update { it.copy(isPaused = false) }
+        viewModelScope.launch {
+            audioRecorder.resumeRecording()
+            _uiState.update { it.copy(isPaused = false) }
+        }
     }
 
     fun stopRecording(audioFilePath: String, durationSeconds: Long) {
-        _uiState.update {
-            it.copy(
-                isRecording = false,
-                audioFilePath = audioFilePath,
-                recordingDuration = durationSeconds
-            )
+        viewModelScope.launch {
+            val duration = audioRecorder.stopRecording().getOrDefault(durationSeconds)
+            _uiState.update {
+                it.copy(
+                    isRecording = false,
+                    audioFilePath = it.audioFilePath.ifBlank { audioFilePath },
+                    recordingDuration = duration
+                )
+            }
+        }
+    }
+
+    fun cancelRecording() {
+        viewModelScope.launch {
+            audioRecorder.cancelRecording()
+            transcriptionService.release()
+            _uiState.update { it.copy(isRecording = false, audioFilePath = "", recordingDuration = 0L) }
         }
     }
 
@@ -57,10 +86,15 @@ class RecorderViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.update { it.copy(isSaving = true) }
+                val generatedTranscript = if (transcript.isBlank()) {
+                    transcriptionService.generateTranscript(_uiState.value.audioFilePath, language).getOrDefault("")
+                } else {
+                    transcript
+                }
                 val note = VoiceNote(
                     id = UUID.randomUUID().toString(),
                     title = title.ifBlank { "Voice Note" },
-                    transcript = transcript,
+                    transcript = generatedTranscript,
                     audioFilePath = _uiState.value.audioFilePath,
                     createdAt = Instant.now(),
                     durationSeconds = _uiState.value.recordingDuration,

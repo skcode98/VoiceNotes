@@ -2,7 +2,7 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("kotlin-kapt")
-    id("com.google.gms.google-services")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
@@ -137,7 +137,8 @@ dependencies {
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.33.2-alpha")
 
     // ML Kit for transcription (alternative: use Google Cloud Speech API)
-    implementation("com.google.mlkit:speech-recognition:16.1.0")
+    implementation("com.google.mlkit:language-id:17.0.6")
+    implementation("com.google.mlkit:translate:17.0.3")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voicenotes.app.domain.model.VoiceNote
 import com.voicenotes.app.domain.usecase.SaveNoteUseCase
+import com.voicenotes.app.domain.repository.VoiceNoteRepository
+import com.voicenotes.app.domain.usecase.DeleteNoteUseCase
+import com.voicenotes.app.data.audio.AudioPlayer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,11 +28,33 @@ data class NoteDetailUiState(
 
 @HiltViewModel
 class NoteDetailViewModel @Inject constructor(
-    private val saveNoteUseCase: SaveNoteUseCase
+    private val saveNoteUseCase: SaveNoteUseCase,
+    private val deleteNoteUseCase: DeleteNoteUseCase,
+    private val repository: VoiceNoteRepository,
+    private val audioPlayer: AudioPlayer
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NoteDetailUiState())
     val uiState: StateFlow<NoteDetailUiState> = _uiState.asStateFlow()
+
+    fun loadNote(noteId: String) {
+        if (_uiState.value.note?.id == noteId) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val note = repository.getNoteById(noteId)
+            if (note != null && note.audioFilePath.isNotBlank()) {
+                audioPlayer.preparePlayer(note.audioFilePath)
+            }
+            _uiState.update {
+                it.copy(
+                    note = note,
+                    editedTitle = note?.title.orEmpty(),
+                    editedTranscript = note?.transcript.orEmpty(),
+                    isLoading = false
+                )
+            }
+        }
+    }
 
     fun setNote(note: VoiceNote) {
         _uiState.update {
@@ -70,7 +95,21 @@ class NoteDetailViewModel @Inject constructor(
     }
 
     fun togglePlayback() {
-        _uiState.update { it.copy(isPlaying = !it.isPlaying) }
+        viewModelScope.launch {
+            if (_uiState.value.isPlaying) audioPlayer.pause() else audioPlayer.play()
+            _uiState.update { it.copy(isPlaying = !_uiState.value.isPlaying) }
+        }
+    }
+
+    fun deleteNote() {
+        viewModelScope.launch {
+            _uiState.value.note?.let { deleteNoteUseCase(it.id) }
+        }
+    }
+
+    override fun onCleared() {
+        viewModelScope.launch { audioPlayer.stop() }
+        super.onCleared()
     }
 
     fun updatePlaybackPosition(position: Long) {

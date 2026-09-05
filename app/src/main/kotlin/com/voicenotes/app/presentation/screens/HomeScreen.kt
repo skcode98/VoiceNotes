@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,12 +43,12 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            ExtendedFloatingActionButton(
                 onClick = { navController.navigate(Screen.Recorder.route) },
+                icon = { Icon(Icons.Filled.Mic, contentDescription = null) },
+                text = { Text("New Voice Note") },
                 modifier = Modifier.padding(16.dp)
-            ) {
-                Icon(Icons.Filled.Mic, contentDescription = "New Voice Note")
-            }
+            )
         }
     ) { paddingValues ->
         Column(
@@ -115,6 +116,7 @@ fun SearchBar(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteCard(
     note: VoiceNote,
@@ -138,12 +140,18 @@ fun NoteCard(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = note.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = note.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onNoteClick) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = "Play note")
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = FormatUtils.getPreviewText(note.transcript, 80),

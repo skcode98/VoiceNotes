@@ -9,14 +9,22 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import android.Manifest
+import android.content.pm.PackageManager
 import com.voicenotes.app.presentation.viewmodel.RecorderViewModel
 import com.voicenotes.app.utils.FormatUtils
 import kotlinx.coroutines.delay
@@ -32,7 +40,14 @@ fun RecorderScreen(
     var title by remember { mutableStateOf("") }
     var transcript by remember { mutableStateOf("") }
     var selectedLanguage by remember { mutableStateOf("en") }
+    var languageMenuExpanded by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val requestPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.startRecording(selectedLanguage)
+    }
 
     LaunchedEffect(uiState.isRecording) {
         while (uiState.isRecording && !uiState.isPaused) {
@@ -79,19 +94,19 @@ fun RecorderScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     if (uiState.isRecording) {
-                        // Waveform visualization (simplified)
+                        // A quiet visual cue keeps the recording screen focused.
                         Row(
                             modifier = Modifier
                                 .height(100.dp)
                                 .fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly,
-                            verticalAlignment = Alignment.Center
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             repeat(10) { index ->
                                 Box(
                                     modifier = Modifier
                                         .width(4.dp)
-                                        .fillMaxHeight(fraction = (Math.random() * 0.8f + 0.2f).toFloat())
+                                        .fillMaxHeight(fraction = (0.25f + ((index % 4) * 0.15f)))
                                         .background(
                                             color = MaterialTheme.colorScheme.primary,
                                             shape = MaterialTheme.shapes.small
@@ -122,6 +137,40 @@ fun RecorderScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            ExposedDropdownMenuBox(
+                expanded = languageMenuExpanded,
+                onExpandedChange = { languageMenuExpanded = !languageMenuExpanded }
+            ) {
+                OutlinedTextField(
+                    value = supportedLanguages[selectedLanguage] ?: selectedLanguage,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Spoken language") },
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(languageMenuExpanded)
+                    },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth()
+                )
+                ExposedDropdownMenu(
+                    expanded = languageMenuExpanded,
+                    onDismissRequest = { languageMenuExpanded = false }
+                ) {
+                    supportedLanguages.forEach { (code, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                selectedLanguage = code
+                                languageMenuExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Recording controls
             Row(
                 modifier = Modifier
@@ -133,7 +182,15 @@ fun RecorderScreen(
                     // Start recording
                     FloatingActionButton(
                         onClick = {
-                            viewModel.startRecording()
+                            if (ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO
+                                ) == PackageManager.PERMISSION_GRANTED
+                            ) {
+                                viewModel.startRecording(selectedLanguage)
+                            } else {
+                                requestPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            }
                             recordingTime = 0
                         },
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -158,10 +215,9 @@ fun RecorderScreen(
                         containerColor = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(60.dp)
                     ) {
-                        Text(
-                            text = if (uiState.isPaused) "Resume" else "Pause",
-                            style = MaterialTheme.typography.labelSmall,
-                            textAlign = TextAlign.Center
+                        Icon(
+                            imageVector = if (uiState.isPaused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                            contentDescription = if (uiState.isPaused) "Resume recording" else "Pause recording"
                         )
                     }
 
@@ -184,7 +240,7 @@ fun RecorderScreen(
                     // Cancel
                     IconButton(
                         onClick = {
-                            viewModel.stopRecording("", 0)
+                            viewModel.cancelRecording()
                             recordingTime = 0
                         },
                         modifier = Modifier.size(50.dp)
@@ -241,7 +297,7 @@ fun RecorderScreen(
                     },
                     dismissButton = {
                         TextButton(
-                            onClick = { showSaveDialog = false }
+                                onClick = { showSaveDialog = false }
                         ) {
                             Text("Cancel")
                         }
@@ -251,3 +307,14 @@ fun RecorderScreen(
         }
     }
 }
+
+private val supportedLanguages = linkedMapOf(
+    "en" to "English",
+    "hi" to "Hindi",
+    "mr" to "Marathi",
+    "es" to "Spanish",
+    "fr" to "French",
+    "de" to "German",
+    "pt" to "Portuguese",
+    "ja" to "Japanese"
+)
